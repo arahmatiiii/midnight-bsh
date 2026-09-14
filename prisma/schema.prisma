@@ -1,0 +1,147 @@
+// Midnight BSH — schema
+// The database is the source of truth for the running app. An optional
+// on-chain contract (see /contracts) mirrors the certificate/post/vote
+// model for anyone who wants to deploy a fully on-chain variant, but the
+// app itself never depends on it being deployed.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  walletAddress String   @unique
+  username      String?  @unique
+  createdAt     DateTime @default(now())
+
+  posts        Post[]
+  votes        Vote[]
+  certificates UserCertificate[]
+}
+
+enum Rarity {
+  COMMON
+  UNCOMMON
+  RARE
+}
+
+model Certificate {
+  id               String   @id @default(cuid())
+  slug             String   @unique
+  name             String
+  description      String
+  funnyDescription String
+  icon             String
+  rarity           Rarity   @default(COMMON)
+  createdAt        DateTime @default(now())
+
+  holders    UserCertificate[]
+  gatedPosts Post[]
+}
+
+model UserCertificate {
+  id            String   @id @default(cuid())
+  userId        String
+  certificateId String
+  claimedAt     DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  certificate Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, certificateId])
+}
+
+// One row per calendar night the app has been open. dateKey is the local
+// (TIMEZONE env) calendar date the night started on, e.g. "2026-09-14" for
+// the night that opens at 21:00 on the 14th and closes at 09:00 on the 15th.
+model Night {
+  id           String    @id @default(cuid())
+  dateKey      String    @unique
+  theme        String?
+  startedAt    DateTime  @default(now())
+  rolledOverAt DateTime?
+
+  posts   Post[]
+  summary NightSummary?
+}
+
+model Post {
+  id                    String   @id @default(cuid())
+  nightId               String
+  authorId              String
+  content               String
+  hashtags              String[]
+  requiredCertificateId String?
+  likeCount             Int      @default(0)
+  dislikeCount          Int      @default(0)
+  isArchived            Boolean  @default(false)
+  createdAt             DateTime @default(now())
+
+  night               Night                @relation(fields: [nightId], references: [id], onDelete: Cascade)
+  author              User                 @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  requiredCertificate Certificate?         @relation(fields: [requiredCertificateId], references: [id])
+  votes               Vote[]
+  summaryEntries      NightSummaryEntry[]
+
+  @@index([nightId, isArchived])
+}
+
+enum VoteValue {
+  LIKE
+  DISLIKE
+}
+
+model Vote {
+  id        String    @id @default(cuid())
+  postId    String
+  userId    String
+  value     VoteValue
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+}
+
+model NightSummary {
+  id        String   @id @default(cuid())
+  nightId   String   @unique
+  createdAt DateTime @default(now())
+
+  night   Night               @relation(fields: [nightId], references: [id], onDelete: Cascade)
+  entries NightSummaryEntry[]
+}
+
+enum SummaryRole {
+  TOP
+  BOTTOM
+}
+
+model NightSummaryEntry {
+  id             String      @id @default(cuid())
+  nightSummaryId String
+  postId         String
+  role           SummaryRole
+  rank           Int
+
+  nightSummary NightSummary @relation(fields: [nightSummaryId], references: [id], onDelete: Cascade)
+  post         Post         @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([nightSummaryId, postId])
+}
+
+// Short-lived nonce for SIWE (Sign-In With Ethereum) login challenges.
+// Stored in the DB instead of memory since route handlers are stateless.
+model AuthNonce {
+  id        String   @id @default(cuid())
+  nonce     String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}
