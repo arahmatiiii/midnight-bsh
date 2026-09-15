@@ -92,3 +92,38 @@ without one.
 See `contracts/README.md`. It's a separate, self-contained Hardhat project
 implementing the same post/vote/certificate model as a Solidity contract,
 with a full test suite. The web app works completely without it.
+
+## Landing page, GitHub Pages, and the Android APK
+
+`landing/` is a separate, self-contained static site (Vite + React +
+Tailwind, no backend) that describes the project — it is **not** the running
+app, since GitHub Pages only serves static files and this app needs a real
+Postgres-backed server. It exists for two things:
+
+- **GitHub Pages**: `.github/workflows/pages.yml` builds `landing/` and
+  deploys it on every push to `main`. One-time setup on GitHub: go to
+  **Settings → Pages → Source** and select **GitHub Actions** (this can't be
+  done from a workflow file). Once that's set, the page is live at
+  `https://arahmatiiii.github.io/midnight-bsh/`.
+- **Android APK**: `.github/workflows/apk.yml` wraps that same landing page
+  in a Capacitor WebView and builds a signed release APK on every push to
+  `main`, publishing it to a rolling `apk` GitHub Release so there's a
+  stable download link:
+  `https://github.com/arahmatiiii/midnight-bsh/releases/download/apk/midnight-bsh.apk`.
+  It's signed with a **test-only** keystore committed at
+  `landing/android/keystore/` (so every CI build signs identically and
+  updates install over each other) — replace it with a private keystore
+  before any real store release.
+
+```bash
+cd landing
+npm install
+npm run dev      # preview the landing page
+npm run build    # what both workflows run
+npx cap sync android   # after npm run build, to update the wrapped app
+```
+
+If you deploy the real app somewhere with a public URL (Vercel + a managed
+Postgres like Neon), you can point `capacitor.config.ts`'s `server.url` at
+it instead of `webDir: 'dist'` to make the Android app load the live app
+instead of the static landing page.

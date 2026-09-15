@@ -12,8 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
-    // The Solidity/Hardhat subproject has its own tooling and tsconfig.
+    // These subprojects have their own tooling and tsconfig.
     "contracts/**",
+    "landing/**",
   ]),
 ]);
 
